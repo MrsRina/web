@@ -23,9 +23,6 @@ class VokeProgram {
     constructor(shaders) {
         this.id = gl.createProgram();
         shaders.forEach((key, value) => {
-            console.log(key);
-            console.log(value);
-
             const shader = gl.createShader(key);
             gl.shaderSource(shader, value);
             gl.compileShader(shader);
