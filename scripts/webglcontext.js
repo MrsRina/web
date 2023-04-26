@@ -1,5 +1,4 @@
 
-
 var canvas = document.getElementById("webgl-context");
 var gl = canvas.getContext("webgl");
 var glExt = gl.getExtension("OES_vertex_array_object");
@@ -259,6 +258,14 @@ var tickingPos = [0.0, 0.0];
 var trsMatrix = glMatrix.mat4;
 var projMatrix = glMatrix.mat4;
 
+canvas.style.width = "100%";
+canvas.style.height = "100%"
+
+canvas.width = 1280;
+canvas.height = 720;
+
+console.log(canvas.width);
+
 // the main renderer function.
 function onRender() {
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -272,7 +279,6 @@ function onRender() {
     glMatrix.mat4.perspective(projMatrix, 1.5707963267948966, canvas.width / canvas.height, 0.1, 100.0);
 
     trsMatrix = glMatrix.mat4.create();
-    
     glMatrix.mat4.rotateX(trsMatrix, trsMatrix, this.tickingPos[0]);
     glMatrix.mat4.rotateY(trsMatrix, trsMatrix, this.tickingPos[0]);
     glMatrix.mat4.rotateZ(trsMatrix, trsMatrix, this.tickingPos[0]);
