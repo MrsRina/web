@@ -1,4 +1,3 @@
-
 var canvas = document.getElementById("webgl-context");
 var gl = canvas.getContext("webgl");
 var glExt = gl.getExtension("OES_vertex_array_object");
@@ -121,7 +120,16 @@ class VokeBuffer {
     }
 }
 
-programEffects = new VokeProgram(new Map([
+class VokeFontRenderer {
+    constructor(filesystempath) {
+        console.log(opentype);
+        this.fontFace = opentype.load(filesystempath, {}, {isUrl: false});
+        console.log(this.fontFace.supported);
+    }
+};
+
+var vokeFontRendering = new VokeFontRenderer("./assets/JetBrainsMono-Bald.ttf");
+var programEffects = new VokeProgram(new Map([
     [`
     attribute vec3 aPos;
     varying vec3 vPos;
@@ -327,9 +335,6 @@ bufferQuad.invoke();
 bufferQuad.bind(0, [gl.ARRAY_BUFFER, gl.FLOAT]);
 bufferQuad.send(new Float32Array(vertices), gl.STATIC_DRAW);
 bufferQuad.attach(0, 3, [0, 0]);
-
-//bufferQuad.bind(0, [gl.ELEMENT_ARRAY_BUFFER, gl.INT]);
-//bufferQuad.send(new Int32Array(indices), gl.STATIC_DRAW);
 bufferQuad.revoke();
 
 var tickingPos = [Math.random() * Math.PI * 2.2848, 0.0];
@@ -349,10 +354,10 @@ function onRender() {
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     this.tickingPos[0] += 0.001;
-    this.tickingPos[1] -= 1.0;
+    this.tickingPos[1] -= 0.001;
 
     projMatrix = glMatrix.mat4.create();
-    glMatrix.mat4.perspective(projMatrix, 1.5707963267948966, canvas.width / canvas.height, 0.1, 100.0);
+    glMatrix.mat4.perspective(projMatrix, 1.5707963267948966 /* 90 degree */, canvas.width / canvas.height, 0.1, 100.0);
 
     trsMatrix = glMatrix.mat4.create();
     glMatrix.mat4.rotateX(trsMatrix, trsMatrix, this.tickingPos[0]);
@@ -360,7 +365,7 @@ function onRender() {
     glMatrix.mat4.rotateZ(trsMatrix, trsMatrix, this.tickingPos[0]);
     glMatrix.mat4.translate(trsMatrix, trsMatrix, [-1.0, -1.0, -1.0]);
     glMatrix.mat4.scale(trsMatrix, trsMatrix, [2.0, 2.0, 2.0]);
-    glMatrix.mat4.multiply(projMatrix, projMatrix, trsMatrix)
+    glMatrix.mat4.multiply(projMatrix, projMatrix, trsMatrix);
     
     programEffects.invoke();
     programEffects.setUniformVec2("uMousePos", [this.mposx, this.mposy]);
