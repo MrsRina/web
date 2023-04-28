@@ -1,13 +1,13 @@
 var canvas = document.getElementById("webgl-context");
 var gl = canvas.getContext("webgl");
-var glExt = gl.getExtension("OES_vertex_array_object");
+var glext = gl.getExtension("OES_vertex_array_object");
 
 // Install the gl extensions.
-if (glExt) {
-    gl["createVertexArray"] = function() {return glExt["createVertexArrayOES"](); };
-    gl["deleteVertexArray"] = function(vao) { glExt["deleteVertexArrayOES"](vao); };
-    gl["bindVertexArray"] = function(vao) { glExt["bindVertexArrayOES"](vao); };
-    gl["isVertexArray"] = function(vao) { return glExt["isVertexArrayOES"](vao); };
+if (glext) {
+    gl["createVertexArray"] = function() {return glext["createVertexArrayOES"](); };
+    gl["deleteVertexArray"] = function(vao) { glext["deleteVertexArrayOES"](vao); };
+    gl["bindVertexArray"] = function(vao) { glext["bindVertexArrayOES"](vao); };
+    gl["isVertexArray"] = function(vao) { return glext["isVertexArrayOES"](vao); };
 }
 
 var mposx = 0.0;
@@ -18,7 +18,16 @@ document.addEventListener("mousemove", function(event) {
     mposy = event.clientY;
 });
 
-class VokeProgram {
+function getcharfromint(integer) {
+    const code = ' '.charCodeAt(0);
+    return String.fromCharCode(code + integer);
+}
+
+function getcharcodefromint(integer) {
+    return ' '.charCodeAt(0) + integer;
+}
+
+class vokeprogram {
     constructor(shaders) {
         this.id = gl.createProgram();
         shaders.forEach((key, value) => {
@@ -31,12 +40,12 @@ class VokeProgram {
         gl.linkProgram(this.id);
     }
 
-    setUniformVec2(uniformName, vec) {
-        gl.uniform2f(gl.getUniformLocation(this.id, uniformName), vec[0], vec[1]);
+    setuniformvec2(uniformname, vec) {
+        gl.uniform2f(gl.getUniformLocation(this.id, uniformname), vec[0], vec[1]);
     }
 
-    setUniformMat4(uniformName, mat) {
-        gl.uniformMatrix4fv(gl.getUniformLocation(this.id, uniformName), false, mat);
+    setuniformmat4(uniformname, mat) {
+        gl.uniformMatrix4fv(gl.getUniformLocation(this.id, uniformname), false, mat);
     }
 
     invoke() {
@@ -48,23 +57,23 @@ class VokeProgram {
     }
 };
 
-class VokeBuffer {
+class vokebuffer {
     constructor() {
-        this.bufferMap = new Map();
-        this.contextBufferInfo = [];
-        this.indexingRendering = false;
+        this.buffermap = new Map();
+        this.contextbufferinfo = [];
+        this.indexingrendering = false;
         this.vao = 0;
         this.stride = [];
         this.primitive = [];
     }
 
-    setStride(x, y, z) {
+    setstride(x, y, z) {
         this.stride[0] = x;
         this.stride[1] = y;
         this.stride[2] = z;
     }
 
-    setPrimitive(array) {
+    setprimitive(array) {
         this.primitive[0] = array;
     }
 
@@ -80,39 +89,39 @@ class VokeBuffer {
         gl.bindVertexArray(null);
     }
 
-    bind(key, bufferType) {
-        if (!this.bufferMap.has(key)) {
-            this.bufferMap[key] = gl.createBuffer();
+    bind(key, buffertype) {
+        if (!this.buffermap.has(key)) {
+            this.buffermap[key] = gl.createBuffer();
         }
 
-        gl.bindBuffer(bufferType[0], this.bufferMap[key]);
-        this.contextBufferInfo = bufferType;
+        gl.bindBuffer(buffertype[0], this.buffermap[key]);
+        this.contextbufferinfo = buffertype;
 
-        if (bufferType[0] == gl.ELEMENT_ARRAY_BUFFER) {
-            this.indexingRendering = true;
-            this.primitive[1] = bufferType[1];
+        if (buffertype[0] == gl.ELEMENT_ARRAY_BUFFER) {
+            this.indexingrendering = true;
+            this.primitive[1] = buffertype[1];
         }
     }
 
     send(data, mode) {
-        gl.bufferData(this.contextBufferInfo[0], data, mode);
+        gl.bufferData(this.contextbufferinfo[0], data, mode);
     }
 
-    edit(bufferStride, data) {
-        gl.bufferSubData(this.contextBufferInfo[0], bufferStride, data)
+    edit(bufferstride, data) {
+        gl.bufferSubData(this.contextbufferinfo[0], bufferstride, data)
     }
 
     attach(location, vec, locationStride) {
         gl.enableVertexAttribArray(location);
-        gl.vertexAttribPointer(location, vec, this.contextBufferInfo[1], false, locationStride[0], locationStride[1]);
+        gl.vertexAttribPointer(location, vec, this.contextbufferinfo[1], false, locationStride[0], locationStride[1]);
     }
 
     unbind() {
-        gl.bindBuffer(this.contextBufferInfo[0], 0);
+        gl.bindBuffer(this.contextbufferinfo[0], 0);
     }
 
     draw() {
-        if (this.indexingRendering) {
+        if (this.indexingrendering) {
             gl.drawElements(this.primitive[0], this.stride[1], this.primitive[1], this.stride[0]);
         } else {
             gl.drawArrays(this.primitive[0], this.stride[0], this.stride[1]);
@@ -120,16 +129,60 @@ class VokeBuffer {
     }
 }
 
-class VokeFontRenderer {
-    constructor(filesystempath) {
-        console.log(opentype);
-        this.fontFace = opentype.load(filesystempath, {}, {isUrl: false});
-        console.log(this.fontFace.supported);
+class vokefontrenderer {
+    constructor(url, fontsize) {
+        this.glyphdata = {};
+        this.fontface = fetch(url).then(res => res.arrayBuffer()).then(buffer => {
+            const font = opentype.parse(buffer)
+            console.log(font.supported);
+            var x = 0;
+
+            for (var i = 0; i < 95; i++ ) {
+                var glyph = font.charToGlyph(getcharfromint(i));
+                var path = glyph.getPath(0, 0, 95);
+                var boundingbox = path.getBoundingBox();
+                var advance = glyph.advanceWidth * fontsize / glyph.path.unitsPerEm;
+                var glyphcanvas = document.createElement('canvas');
+                var glyphcontext = glyphcanvas.getContext('2d');
+
+                glyphcanvas.width = fontsize;
+                glyphcanvas.height = fontsize;
+
+                glyph.draw(glyphcontext, fontsize / 2 - boundingbox.x1, fontsize / 2 + boundingbox.y2);
+                glyphdata[getcharcodefromint(i)] = {
+                    canvas: glyphcanvas,
+                    boundingbox: boundingbox,
+                    advance: advance,
+                    width: fontsize,
+                    height: fontsize
+                };
+
+                x += advance;
+            }
+
+            var atlascanvas = document.createElement('canvas');
+            var atlascontext = atlascanvas.getContext('2d');
+            var atlassize = Math.pow(2, Math.ceil(Math.log2(x)));
+
+            atlascanvas.width = atlassize;
+            atlascanvas.height = fontsize;
+
+            var atlasdata = {};
+            x = 0;
+
+            for (var i = 0; i < 95; i++) {
+                charcode = getcharcodefromint(i);
+                var glyph = this.glyphdata[getcharcodefromint()]
+                atlascontext.drawImage(glyph);
+            }
+        });
+
+
     }
 };
 
-var vokeFontRendering = new VokeFontRenderer("./assets/JetBrainsMono-Bald.ttf");
-var programEffects = new VokeProgram(new Map([
+var vokefontrendering = new vokefontrenderer("https://mrsrina.github.io/web/assets/JetBrainsMono-Bold.ttf");
+var programeffects = new vokeprogram(new Map([
     [`
     attribute vec3 aPos;
     varying vec3 vPos;
@@ -314,8 +367,8 @@ var programEffects = new VokeProgram(new Map([
     }`, gl.FRAGMENT_SHADER]
 ]));
 
-bufferQuad = new VokeBuffer();
-bufferQuad.setPrimitive(gl.POINT);
+var bufferquad = new vokebuffer();
+bufferquad.setprimitive(gl.POINT);
 
 var vertices = [];
 var volume = [64, 64, 64];
@@ -330,16 +383,16 @@ for (var x = 0; x < volume[0]; x++) {
     }
 }
 
-bufferQuad.setStride(0, vertices.length / 3, 0);
-bufferQuad.invoke();
-bufferQuad.bind(0, [gl.ARRAY_BUFFER, gl.FLOAT]);
-bufferQuad.send(new Float32Array(vertices), gl.STATIC_DRAW);
-bufferQuad.attach(0, 3, [0, 0]);
-bufferQuad.revoke();
+bufferquad.setstride(0, vertices.length / 3, 0);
+bufferquad.invoke();
+bufferquad.bind(0, [gl.ARRAY_BUFFER, gl.FLOAT]);
+bufferquad.send(new Float32Array(vertices), gl.STATIC_DRAW);
+bufferquad.attach(0, 3, [0, 0]);
+bufferquad.revoke();
 
-var tickingPos = [Math.random() * Math.PI * 2.2848, 0.0];
-var trsMatrix = glMatrix.mat4;
-var projMatrix = glMatrix.mat4;
+var tickingpos = [Math.random() * Math.PI * 2.2848, 0.0];
+var trsmatrix = glMatrix.mat4;
+var projectionmatrix = glMatrix.mat4;
 
 canvas.style.width = "100%";
 canvas.style.height = "100%"
@@ -348,37 +401,37 @@ canvas.width = 1280;
 canvas.height = 720;
 
 // the main renderer function.
-function onRender() {
+function onrender() {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    this.tickingPos[0] += 0.001;
-    this.tickingPos[1] -= 0.001;
+    tickingpos[0] += 0.001;
+    tickingpos[1] -= 0.001;
 
-    projMatrix = glMatrix.mat4.create();
-    glMatrix.mat4.perspective(projMatrix, 1.5707963267948966 /* 90 degree */, canvas.width / canvas.height, 0.1, 100.0);
+    projectionmatrix = glMatrix.mat4.create();
+    glMatrix.mat4.perspective(projectionmatrix, 1.5707963267948966 /* 90 degree */, canvas.width / canvas.height, 0.1, 100.0);
 
-    trsMatrix = glMatrix.mat4.create();
-    glMatrix.mat4.rotateX(trsMatrix, trsMatrix, this.tickingPos[0]);
-    glMatrix.mat4.rotateY(trsMatrix, trsMatrix, this.tickingPos[0]);
-    glMatrix.mat4.rotateZ(trsMatrix, trsMatrix, this.tickingPos[0]);
-    glMatrix.mat4.translate(trsMatrix, trsMatrix, [-1.0, -1.0, -1.0]);
-    glMatrix.mat4.scale(trsMatrix, trsMatrix, [2.0, 2.0, 2.0]);
-    glMatrix.mat4.multiply(projMatrix, projMatrix, trsMatrix);
+    trsmatrix = glMatrix.mat4.create();
+    glMatrix.mat4.rotateX(trsmatrix, trsmatrix, tickingpos[0]);
+    glMatrix.mat4.rotateY(trsmatrix, trsmatrix, tickingpos[0]);
+    glMatrix.mat4.rotateZ(trsmatrix, trsmatrix, tickingpos[0]);
+    glMatrix.mat4.translate(trsmatrix, trsmatrix, [-1.0, -1.0, -1.0]);
+    glMatrix.mat4.scale(trsmatrix, trsmatrix, [2.0, 2.0, 2.0]);
+    glMatrix.mat4.multiply(projectionmatrix, projectionmatrix, trsmatrix);
     
-    programEffects.invoke();
-    programEffects.setUniformVec2("uMousePos", [this.mposx, this.mposy]);
-    programEffects.setUniformVec2("uTickingPos", this.tickingPos);
-    programEffects.setUniformMat4("uMVP", projMatrix);
+    programeffects.invoke();
+    programeffects.setuniformvec2("uMousePos", [mposx, mposy]);
+    programeffects.setuniformvec2("uTickingPos", tickingpos);
+    programeffects.setuniformmat4("uMVP", projectionmatrix);
 
-    bufferQuad.invoke();
-    bufferQuad.draw();
-    bufferQuad.revoke();
-    programEffects.revoke();
+    bufferquad.invoke();
+    bufferquad.draw();
+    bufferquad.revoke();
+    programeffects.revoke();
 
-    requestAnimationFrame(onRender);
+    requestAnimationFrame(onrender);
 }
 
 // Request animation to start rendering loop
-requestAnimationFrame(onRender);
+requestAnimationFrame(onrender);
