@@ -131,25 +131,44 @@ class vokebuffer {
 
 class vokefontrenderer {
     constructor(url, fontsize) {
-        this.glyphdata = {};
+        this.program = null;
+        this.texture = gl.createTexture();
+        var gltexture = this.texture;
         this.fontface = fetch(url).then(res => res.arrayBuffer()).then(buffer => {
             const font = opentype.parse(buffer)
-            console.log(font.supported);
             var x = 0;
+            var glyphdata = {};
 
-            for (var i = 0; i < 95; i++ ) {
-                var glyph = font.charToGlyph(getcharfromint(i));
-                var path = glyph.getPath(0, 0, 95);
+            for (var i = 0; i < 95; i++) {
+                var cutechar = getcharfromint(i).charAt(0);
+                var charcode = getcharcodefromint(i);
+
+                if (cutechar == ' ') {
+                    glyphdata[charcode] = {
+                        canvas: null,
+                        boundingbox: null,
+                        advance: fontsize,
+                        width: fontsize,
+                        height: fontsize
+                    };
+
+                    x += fontsize;
+                    continue;
+                }
+
+                var glyphfont = font.charToGlyph(cutechar);
+                var path = glyphfont.getPath(0, 0, fontsize);
                 var boundingbox = path.getBoundingBox();
-                var advance = glyph.advanceWidth * fontsize / glyph.path.unitsPerEm;
+                var advance = glyphfont.advanceWidth * fontsize / glyphfont.path.unitsPerEm;
+
                 var glyphcanvas = document.createElement('canvas');
                 var glyphcontext = glyphcanvas.getContext('2d');
 
                 glyphcanvas.width = fontsize;
                 glyphcanvas.height = fontsize;
 
-                glyph.draw(glyphcontext, fontsize / 2 - boundingbox.x1, fontsize / 2 + boundingbox.y2);
-                glyphdata[getcharcodefromint(i)] = {
+                glyphfont.draw(glyphcontext, fontsize / 2 - boundingbox.x1, fontsize / 2 + boundingbox.y2);
+                glyphdata[charcode] = {
                     canvas: glyphcanvas,
                     boundingbox: boundingbox,
                     advance: advance,
@@ -159,7 +178,7 @@ class vokefontrenderer {
 
                 x += advance;
             }
-
+            
             var atlascanvas = document.createElement('canvas');
             var atlascontext = atlascanvas.getContext('2d');
             var atlassize = Math.pow(2, Math.ceil(Math.log2(x)));
@@ -168,20 +187,57 @@ class vokefontrenderer {
             atlascanvas.height = fontsize;
 
             var atlasdata = {};
+            var charcode = 0;
             x = 0;
 
             for (var i = 0; i < 95; i++) {
                 charcode = getcharcodefromint(i);
-                var glyph = this.glyphdata[getcharcodefromint()]
-                atlascontext.drawImage(glyph);
+                var glyph = glyphdata[charcode];
+
+                if (charcode != 32) {
+                    atlascontext.drawImage(glyph.canvas, x, 0);
+                }
+
+                atlasdata[charcode] = {
+                    x: x,
+                    y: 0,
+                    width: glyph.width,
+                    height: glyph.height
+                };
+
+                x += glyph.advance;
             }
+
+            gl.bindTexture(gl.TEXTURE_2D, gltexture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlascanvas);
+            //gl.generateMipmap(gl.TEXTURE_2D);
+            gl.bindTexture(gl.TEXTURE_2D, null);
         });
+    }
 
+    draw(text, x, y, color) {
+        if (text.length == 0) {
+            return;
+        }
 
+        this.program.setuniformvec4("uColor", color);
+
+        for (var it = 0; it < text.length; it++) {
+            var cutechar = text.charAt(it);
+            var charcode = cutechar.charCodeAt(0);
+
+            console.log(charcode);
+        }
     }
 };
 
-var vokefontrendering = new vokefontrenderer("https://mrsrina.github.io/web/assets/JetBrainsMono-Bold.ttf");
+var vokefontrendering = new vokefontrenderer("https://mrsrina.github.io/web/assets/JetBrainsMono-Bold.ttf", 18);
+var programoverlay = new vokeprogram(new Map([
+    [`
+    attribute vec2 aPos;
+    attribute vec2 aTexCoord;
+    `]
+]));
 var programeffects = new vokeprogram(new Map([
     [`
     attribute vec3 aPos;
@@ -268,9 +324,9 @@ var programeffects = new vokeprogram(new Map([
     }
 
     void main() {
-        gl_Position = uMVP  * vec4(aPos, 1.0);
+        gl_Position = uMVP * vec4(aPos, 1.0);
         vPos = aPos;
-        gl_PointSize = noise(vec2(0.0, gl_Position.z * 6.0)) * 3.0;
+        gl_PointSize = 1.0;
     }
     `, gl.VERTEX_SHADER],
     [`
@@ -395,7 +451,7 @@ var trsmatrix = glMatrix.mat4;
 var projectionmatrix = glMatrix.mat4;
 
 canvas.style.width = "100%";
-canvas.style.height = "100%"
+canvas.style.height = "100%";
 
 canvas.width = 1280;
 canvas.height = 720;
@@ -429,6 +485,8 @@ function onrender() {
     bufferquad.draw();
     bufferquad.revoke();
     programeffects.revoke();
+
+    //vokefontrendering.draw("hi!!!", 10, 10, [255, 255, 255, 255]);
 
     requestAnimationFrame(onrender);
 }
