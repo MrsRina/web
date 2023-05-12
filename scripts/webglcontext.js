@@ -1,14 +1,4 @@
 var canvas = document.getElementById("webgl-context");
-var gl = canvas.getContext("webgl");
-var glext = gl.getExtension("OES_vertex_array_object");
-
-// Install the gl extensions.
-if (glext) {
-    gl["createVertexArray"] = function() {return glext["createVertexArrayOES"](); };
-    gl["deleteVertexArray"] = function(vao) { glext["deleteVertexArrayOES"](vao); };
-    gl["bindVertexArray"] = function(vao) { glext["bindVertexArrayOES"](vao); };
-    gl["isVertexArray"] = function(vao) { return glext["isVertexArrayOES"](vao); };
-}
 
 var mposx = 0.0;
 var mposy = 0.0;
@@ -18,221 +8,53 @@ document.addEventListener("mousemove", function(event) {
     mposy = event.clientY;
 });
 
-function getcharfromint(integer) {
-    const code = ' '.charCodeAt(0);
-    return String.fromCharCode(code + integer);
+function updateorthomatrix(width, height) {
+    var left = 0.0;
+    var right = width;
+    var bottom = height;
+    var top = 0.0;
+    var near = 0.0;
+    var far = 1.0;
+
+    return [
+        2.0 / (right - left), 0.0, 0.0, 0.0,
+        0.0, 2.0 / (top - bottom), 0.0, 0.0,
+        0.0, 0.0, (-2.0) / (far - near), 0.0,
+        -((right + left) / (right - left)), -((top + bottom) / (top - bottom)), -((far + near)/(far - near)),  1.0
+    ];
 }
 
-function getcharcodefromint(integer) {
-    return ' '.charCodeAt(0) + integer;
-}
-
-class vokeprogram {
-    constructor(shaders) {
-        this.id = gl.createProgram();
-        shaders.forEach((key, value) => {
-            const shader = gl.createShader(key);
-            gl.shaderSource(shader, value);
-            gl.compileShader(shader);
-            gl.attachShader(this.id, shader);
-        });
-
-        gl.linkProgram(this.id);
-    }
-
-    setuniformvec2(uniformname, vec) {
-        gl.uniform2f(gl.getUniformLocation(this.id, uniformname), vec[0], vec[1]);
-    }
-
-    setuniformmat4(uniformname, mat) {
-        gl.uniformMatrix4fv(gl.getUniformLocation(this.id, uniformname), false, mat);
-    }
-
-    invoke() {
-        gl.useProgram(this.id);    
-    }
-
-    revoke() {
-        gl.useProgram(null);
-    }
-};
-
-class vokebuffer {
-    constructor() {
-        this.buffermap = new Map();
-        this.contextbufferinfo = [];
-        this.indexingrendering = false;
-        this.vao = 0;
-        this.stride = [];
-        this.primitive = [];
-    }
-
-    setstride(x, y, z) {
-        this.stride[0] = x;
-        this.stride[1] = y;
-        this.stride[2] = z;
-    }
-
-    setprimitive(array) {
-        this.primitive[0] = array;
-    }
-
-    invoke() {
-        if (this.vao == 0) {
-            this.vao = gl.createVertexArray();
-        }
-
-        gl.bindVertexArray(this.vao);
-    }
-
-    revoke() {
-        gl.bindVertexArray(null);
-    }
-
-    bind(key, buffertype) {
-        if (!this.buffermap.has(key)) {
-            this.buffermap[key] = gl.createBuffer();
-        }
-
-        gl.bindBuffer(buffertype[0], this.buffermap[key]);
-        this.contextbufferinfo = buffertype;
-
-        if (buffertype[0] == gl.ELEMENT_ARRAY_BUFFER) {
-            this.indexingrendering = true;
-            this.primitive[1] = buffertype[1];
-        }
-    }
-
-    send(data, mode) {
-        gl.bufferData(this.contextbufferinfo[0], data, mode);
-    }
-
-    edit(bufferstride, data) {
-        gl.bufferSubData(this.contextbufferinfo[0], bufferstride, data)
-    }
-
-    attach(location, vec, locationStride) {
-        gl.enableVertexAttribArray(location);
-        gl.vertexAttribPointer(location, vec, this.contextbufferinfo[1], false, locationStride[0], locationStride[1]);
-    }
-
-    unbind() {
-        gl.bindBuffer(this.contextbufferinfo[0], 0);
-    }
-
-    draw() {
-        if (this.indexingrendering) {
-            gl.drawElements(this.primitive[0], this.stride[1], this.primitive[1], this.stride[0]);
-        } else {
-            gl.drawArrays(this.primitive[0], this.stride[0], this.stride[1]);
-        }
-    }
-}
-
-class vokefontrenderer {
-    constructor(url, fontsize) {
-        this.program = null;
-        this.texture = gl.createTexture();
-        var gltexture = this.texture;
-        this.fontface = fetch(url).then(res => res.arrayBuffer()).then(buffer => {
-            const font = opentype.parse(buffer)
-            var x = 0;
-            var glyphdata = {};
-
-            for (var i = 0; i < 95; i++) {
-                var cutechar = getcharfromint(i).charAt(0);
-                var charcode = getcharcodefromint(i);
-
-                if (cutechar == ' ') {
-                    glyphdata[charcode] = {
-                        canvas: null,
-                        boundingbox: null,
-                        advance: fontsize,
-                        width: fontsize,
-                        height: fontsize
-                    };
-
-                    x += fontsize;
-                    continue;
-                }
-
-                var glyphfont = font.charToGlyph(cutechar);
-                var path = glyphfont.getPath(0, 0, fontsize);
-                var boundingbox = path.getBoundingBox();
-                var advance = glyphfont.advanceWidth * fontsize / glyphfont.path.unitsPerEm;
-
-                var glyphcanvas = document.createElement('canvas');
-                var glyphcontext = glyphcanvas.getContext('2d');
-
-                glyphcanvas.width = fontsize;
-                glyphcanvas.height = fontsize;
-
-                glyphfont.draw(glyphcontext, fontsize / 2 - boundingbox.x1, fontsize / 2 + boundingbox.y2);
-                glyphdata[charcode] = {
-                    canvas: glyphcanvas,
-                    boundingbox: boundingbox,
-                    advance: advance,
-                    width: fontsize,
-                    height: fontsize
-                };
-
-                x += advance;
-            }
-            
-            var atlascanvas = document.createElement('canvas');
-            var atlascontext = atlascanvas.getContext('2d');
-            var atlassize = Math.pow(2, Math.ceil(Math.log2(x)));
-
-            atlascanvas.width = atlassize;
-            atlascanvas.height = fontsize;
-
-            var atlasdata = {};
-            var charcode = 0;
-            x = 0;
-
-            for (var i = 0; i < 95; i++) {
-                charcode = getcharcodefromint(i);
-                var glyph = glyphdata[charcode];
-
-                if (charcode != 32) {
-                    atlascontext.drawImage(glyph.canvas, x, 0);
-                }
-
-                atlasdata[charcode] = {
-                    x: x,
-                    y: 0,
-                    width: glyph.width,
-                    height: glyph.height
-                };
-
-                x += glyph.advance;
-            }
-
-            gl.bindTexture(gl.TEXTURE_2D, gltexture);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlascanvas);
-            //gl.generateMipmap(gl.TEXTURE_2D);
-            gl.bindTexture(gl.TEXTURE_2D, null);
-        });
-    }
-
-    draw(text, x, y, color) {
-        if (text.length == 0) {
-            return;
-        }
-
-        this.program.setuniformvec4("uColor", color);
-
-        for (var it = 0; it < text.length; it++) {
-            var cutechar = text.charAt(it);
-            var charcode = cutechar.charCodeAt(0);
-
-            console.log(charcode);
-        }
-    }
-};
-
+var batch = new vokebatch();
 var vokefontrendering = new vokefontrenderer("https://mrsrina.github.io/web/assets/JetBrainsMono-Bold.ttf", 18);
+var batchprogram = new vokeprogram(new Map([
+    [`
+    attribute vec2 aPos;
+    attribute vec2 aTexCoord;
 
+    uniform mat4 uMVP;
+    uniform vec4 uRect;
+    varying vec2 vTexCoord;
+
+    void main() {
+        if (uRect.z == 0.0 && uRect.w == 0.0) {
+            gl_Position = uMVP * vec4(aPos, 0.0, 1.0);
+        } else {
+            gl_Position = uMVP * vec4((aPos * uRect.zw) + uRect.xy, 0.0, 1.0);
+        }
+
+        vTexCoord = aTexCoord;
+    }
+    `, gl.VERTEX_SHADER],
+    [`
+    precision mediump float;
+    varying vec2 vTexCoord;
+    uniform vec4 uColor;
+
+    void main() {
+        gl_FragColor = uColor;
+    }
+    `, gl.FRAGMENT_SHADER]
+]));
 
 var programeffects = new vokeprogram(new Map([
     [`
@@ -419,6 +241,41 @@ var programeffects = new vokeprogram(new Map([
     }`, gl.FRAGMENT_SHADER]
 ]));
 
+canvas.style.width = "100%";
+canvas.style.height = "100%";
+
+canvas.width = 1280;
+canvas.height = 720;
+
+var mat4x4ortho = updateorthomatrix(canvas.width, canvas.height);
+
+batch.attachprogram(batchprogram.id);
+batch.mat4x4mvp = mat4x4ortho;
+
+batch.invoke();
+batch.call({
+    rect: [20, 20, 200, 200],
+    color: [1.0, 1.0, 1.0, 1.0],
+    stride: [0, 6]
+});
+
+batch.pop();
+
+batch.call({
+    rect: [70, 300, 200, 200],
+    color: [1.0, 0.0, 1.0, 1.0]
+});
+
+batch.pop();
+
+batch.call({
+    rect: [240, 70, 200, 200],
+    color: [0.0, 0.0, 1.0, 1.0]
+});
+
+batch.pop();
+batch.revoke();
+
 var bufferquad = new vokebuffer();
 bufferquad.setprimitive(gl.POINT);
 
@@ -445,12 +302,6 @@ bufferquad.revoke();
 var tickingpos = [Math.random() * Math.PI * 2.2848, 0.0];
 var trsmatrix = glMatrix.mat4;
 var projectionmatrix = glMatrix.mat4;
-
-canvas.style.width = "100%";
-canvas.style.height = "100%";
-
-canvas.width = 1280;
-canvas.height = 720;
 
 // the main renderer function.
 function onrender() {
@@ -483,6 +334,8 @@ function onrender() {
     programeffects.revoke();
 
     //vokefontrendering.draw("hi!!!", 10, 10, [255, 255, 255, 255]);
+
+    batch.draw();
 
     requestAnimationFrame(onrender);
 }
