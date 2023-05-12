@@ -232,12 +232,8 @@ class vokefontrenderer {
 };
 
 var vokefontrendering = new vokefontrenderer("https://mrsrina.github.io/web/assets/JetBrainsMono-Bold.ttf", 18);
-var programoverlay = new vokeprogram(new Map([
-    [`
-    attribute vec2 aPos;
-    attribute vec2 aTexCoord;
-    `]
-]));
+
+
 var programeffects = new vokeprogram(new Map([
     [`
     attribute vec3 aPos;
