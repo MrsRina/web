@@ -217,7 +217,7 @@ var bufferquad = new vokebuffer();
 bufferquad.setprimitive(gl.POINT);
 
 var vertices = [];
-var volume = [11, 11, 11];
+var volume = [32, 32, 32];
 
 for (var x = 0; x < volume[0]; x++) {
     for (var y = 0; y < volume[1]; y++) {
