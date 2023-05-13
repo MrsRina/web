@@ -22,9 +22,9 @@ function getcharcodefromint(integer) {
 class vokeprogram {
     constructor(shaders) {
         this.id = gl.createProgram();
-        shaders.forEach((key, value) => {
-            const shader = gl.createShader(key);
-            gl.shaderSource(shader, value);
+        shaders.forEach(shaderjson => {
+            const shader = gl.createShader(shaderjson.stage);
+            gl.shaderSource(shader, shaderjson.src);
             gl.compileShader(shader);
             gl.attachShader(this.id, shader);
         });
@@ -131,7 +131,7 @@ class vokebatch {
         this.texcoorddata = [];
         this.gpudatamap = {};
         
-        this.lastinstanceindex = 0;
+        this.lastinstanceindex = -1;
         this.instanceindex = 0;
         this.attachedprogramid = 0;
         this.isinstanceconvex = false;
@@ -141,6 +141,8 @@ class vokebatch {
         this.uniformlocationrect = 0;
         this.uniformlocationcolor = 0;
         this.uniformlocationmvp = 0;
+        this.uniformlocationtextureon = 0;
+        this.uniformlocationsamplertexture = 0;
         this.mat4x4mvp = [];
     }
 
@@ -150,6 +152,9 @@ class vokebatch {
             this.uniformlocationcolor = gl.getUniformLocation(this.attachedprogramid, "uColor");
             this.uniformlocationrect = gl.getUniformLocation(this.attachedprogramid, "uRect");
             this.uniformlocationmvp = gl.getUniformLocation(this.attachedprogramid, "uMVP");
+            this.uniformlocationtextureon = gl.getUniformLocation(this.attachedprogramid, "uTextureOn");
+            this.uniformlocationsamplertexture = gl.getUniformLocation(this.attachedprogramid, "uSamplerTexture");
+            this.uniformlocationlinethickness = gl.getUniformLocation(this.attachedprogramid, "uLineThickness");
             console.log("Attached program updated uniform locations.");
         }
     }
@@ -180,7 +185,7 @@ class vokebatch {
 
     call(gpudata) {
         this.gpudatamap[this.instanceindex] = gpudata;
-        this.isinstanceconvex = gpudata.rect[2] != 0 || gpudata.rect[3] != 0;
+        this.isinstanceconvex = gpudata.rect.w != 0 || gpudata.rect.h != 0;
         this.strideaccum[1] = 0;
     }
 
@@ -188,7 +193,7 @@ class vokebatch {
         if (this.isinstanceconvex) {
             this.gpudatamap[this.instanceindex].stride = [0, 6];
         } else {
-            this.gpudatamap[this.instanceindex].stride = this.strideaccum;
+            this.gpudatamap[this.instanceindex].stride = [this.strideaccum[0], this.strideaccum[1]];
             this.strideaccum[0] += this.strideaccum[1];
         }
 
@@ -197,7 +202,7 @@ class vokebatch {
 
     pushbackvertices(data) {
         this.vertexposdata = this.vertexposdata.concat(data);
-        this.strideaccum[1]++;
+        this.strideaccum[1] += data.length / 2;
     }
 
     pushbacktexcoords(data) {
@@ -205,7 +210,7 @@ class vokebatch {
     }
 
     revoke() {
-        var shouldswapbuffers = this.instanceindex != this.lastinstanceindex;
+        var shouldswapbuffers = this.lastinstanceindex != this.instanceindex;
         if (shouldswapbuffers) {
             gl.bindVertexArray(this.vertexarr);
             gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexposbuffer);
@@ -220,7 +225,11 @@ class vokebatch {
             gl.enableVertexAttribArray(1);
             gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
             gl.bindVertexArray(null);
+
+            console.log("swapping bufferss");
         }
+
+        this.lastinstanceindex = this.instanceindex;
     }
 
     draw() {
@@ -228,13 +237,33 @@ class vokebatch {
         gl.useProgram(this.attachedprogramid);
         gl.uniformMatrix4fv(this.uniformlocationmvp, false, this.mat4x4mvp);
 
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        var previoustextureactive = -1;
         for (var it = 0; it < this.instanceindex; it++) {
             var gpudata = this.gpudatamap[it];
+            if (gpudata.texture != -1 && previoustextureactive != gpudata.texture) {
+                gl.activeTexture(gl.TEXTURE0);
+                gl.bindTexture(gl.TEXTURE_2D, gpudata.texture);
+                gl.uniform1i(this.uniformlocationtextureon, 1);
+                gl.uniform1i(this.uniformlocationsamplertexture, 0);
+                previoustextureactive = gpudata.texture;
+            } else if (gpudata.texture == -1 && previoustextureactive != gpudata.texture) {
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                gl.uniform1i(this.uniformlocationtextureon, 0);
+                previoustextureactive = -1;
+            }
             
-            gl.uniform4f(this.uniformlocationrect, gpudata.rect[0], gpudata.rect[1], gpudata.rect[2], gpudata.rect[3]);
-            gl.uniform4f(this.uniformlocationcolor, gpudata.color[0], gpudata.color[1], gpudata.color[2], gpudata.color[3]);
+            gl.uniform1f(this.uniformlocationlinethickness, gpudata.linethickness);
+            gl.uniform4f(this.uniformlocationrect, gpudata.rect.x, gpudata.rect.y, gpudata.rect.w, gpudata.rect.h);
+            gl.uniform4f(this.uniformlocationcolor, gpudata.color.r, gpudata.color.g, gpudata.color.b, gpudata.color.a);
             gl.drawArrays(gl.TRIANGLES, gpudata.stride[0], gpudata.stride[1]);
         }
+
+        gl.disable(gl.BLEND);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.uniform1i(this.uniformlocationtextureon, 0);
 
         gl.bindVertexArray(null);
         gl.useProgram(null);
@@ -243,12 +272,20 @@ class vokebatch {
 
 class vokefontrenderer {
     constructor(url, fontsize) {
+        this.batch = null;
         this.program = null;
         this.texture = gl.createTexture();
+        this.atlasglyph = {};
+        this.fontfaceurl = url;
+        this.fontface = null;
+        this.fontfacesize = fontsize;
+        this.fontfacewidth = 0;
+    }
+
+    generateatlas() {
         var gltexture = this.texture;
-        this.fontface = fetch(url).then(res => res.arrayBuffer()).then(buffer => {
-            const font = opentype.parse(buffer)
-            var x = 0;
+        this.fontface = fetch(this.fontfaceurl).then(res => res.arrayBuffer()).then(buffer => {
+            const font = opentype.parse(buffer);
             var glyphdata = {};
 
             for (var i = 0; i < 95; i++) {
@@ -259,48 +296,48 @@ class vokefontrenderer {
                     glyphdata[charcode] = {
                         canvas: null,
                         boundingbox: null,
-                        advance: fontsize,
-                        width: fontsize,
-                        height: fontsize
+                        advance: this.fontfacesize,
+                        width: this.fontfacesize,
+                        height: this.fontfacesize
                     };
 
-                    x += fontsize;
+                    x += this.fontfacesize;
                     continue;
                 }
 
                 var glyphfont = font.charToGlyph(cutechar);
-                var path = glyphfont.getPath(0, 0, fontsize);
+                var path = glyphfont.getPath(0, 0, this.fontfacesize);
                 var boundingbox = path.getBoundingBox();
-                var advance = glyphfont.advanceWidth * fontsize / glyphfont.path.unitsPerEm;
+                var advance = glyphfont.advanceWidth * (this.fontfacesize / glyphfont.path.unitsPerEm);
 
                 var glyphcanvas = document.createElement('canvas');
                 var glyphcontext = glyphcanvas.getContext('2d');
 
-                glyphcanvas.width = fontsize;
-                glyphcanvas.height = fontsize;
+                glyphcanvas.width = this.fontfacesize;
+                glyphcanvas.height = this.fontfacesize;
 
-                glyphfont.draw(glyphcontext, fontsize / 2 - boundingbox.x1, fontsize / 2 + boundingbox.y2);
+                glyphfont.draw(glyphcontext, path.xMin, ((boundingbox.y2 - boundingbox.y1)), this.fontfacesize);
                 glyphdata[charcode] = {
                     canvas: glyphcanvas,
                     boundingbox: boundingbox,
                     advance: advance,
-                    width: fontsize,
-                    height: fontsize
+                    width: advance,
+                    height: this.fontfacesize,
+                    top: this.fontfacesize - (boundingbox.y2 - boundingbox.y1),
+                    kerning: glyphfont.leftSideBearing
                 };
 
-                x += advance;
+                this.fontfacewidth += advance;
             }
             
             var atlascanvas = document.createElement('canvas');
             var atlascontext = atlascanvas.getContext('2d');
-            var atlassize = Math.pow(2, Math.ceil(Math.log2(x)));
 
-            atlascanvas.width = atlassize;
-            atlascanvas.height = fontsize;
+            atlascanvas.width = this.fontfacewidth;
+            atlascanvas.height = this.fontfacesize;
 
-            var atlasdata = {};
             var charcode = 0;
-            x = 0;
+            var x = 0;
 
             for (var i = 0; i < 95; i++) {
                 charcode = getcharcodefromint(i);
@@ -310,11 +347,13 @@ class vokefontrenderer {
                     atlascontext.drawImage(glyph.canvas, x, 0);
                 }
 
-                atlasdata[charcode] = {
+                this.atlasglyph[charcode] = {
                     x: x,
-                    y: 0,
+                    y: 0.0,
+                    top: glyph.top,
                     width: glyph.width,
-                    height: glyph.height
+                    height: glyph.height,
+                    kerning: glyph.kerning / this.fontfacewidth
                 };
 
                 x += glyph.advance;
@@ -322,9 +361,18 @@ class vokefontrenderer {
 
             gl.bindTexture(gl.TEXTURE_2D, gltexture);
             gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, atlascanvas);
-            //gl.generateMipmap(gl.TEXTURE_2D);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.bindTexture(gl.TEXTURE_2D, null);
+
+            console.log("Font texture created...");
+            document.dispatchEvent(new Event("atlas-texture-created"));
+
         });
+
+        console.log("Font initialised...");
     }
 
     draw(text, x, y, color) {
@@ -332,13 +380,80 @@ class vokefontrenderer {
             return;
         }
 
-        this.program.setuniformvec4("uColor", color);
+        this.batch.call({
+            rect: {x: x, y: y, w: 0, h: 0},
+            color: color,
+            texture: this.texture,
+            linethickness: 0
+        });
 
+        var cutechar = ' ';
+        var charcode = 32;
+        var glyph = {};
+        var vertices = [];
+        var texcoords = [];
+
+        x = 0;
+        y = 0;
+
+        var prevcharcode = 0;
         for (var it = 0; it < text.length; it++) {
-            var cutechar = text.charAt(it);
-            var charcode = cutechar.charCodeAt(0);
+            cutechar = text.charAt(it);
+            charcode = cutechar.charCodeAt(0);
 
-            console.log(charcode);
+            glyph = this.atlasglyph[charcode];
+            if (glyph == undefined) continue;
+
+            var vx = x;
+            var vy = y + glyph.top;
+
+            vertices.push(vx);
+            vertices.push(vy);
+
+            vertices.push(vx + glyph.width);
+            vertices.push(vy);
+
+            vertices.push(vx + glyph.width);
+            vertices.push(vy + glyph.height);
+
+            vertices.push(vx + glyph.width);
+            vertices.push(vy + glyph.height);
+
+            vertices.push(vx);
+            vertices.push(vy + glyph.height);
+
+            vertices.push(vx);
+            vertices.push(vy);
+
+            var glyphx = glyph.x / this.fontfacewidth;
+            var glyphy = glyph.y;
+            var glyphw = glyph.width / this.fontfacewidth;
+            var glyphh = glyph.height / this.fontfacesize;
+
+            texcoords.push(glyphx);
+            texcoords.push(glyphy);
+
+            texcoords.push(glyphx + glyphw);
+            texcoords.push(glyphy);
+
+            texcoords.push(glyphx + glyphw);
+            texcoords.push(glyphy + glyphh);
+
+            texcoords.push(glyphx + glyphw);
+            texcoords.push(glyphy + glyphh);
+
+            texcoords.push(glyphx);
+            texcoords.push(glyphy + glyphh);
+
+            texcoords.push(glyphx);
+            texcoords.push(glyphy);
+
+            x += glyph.width;
+            prevcharcode = charcode;
         }
+
+        this.batch.pushbackvertices(vertices);
+        this.batch.pushbacktexcoords(texcoords);
+        this.batch.pop();
     }
 };

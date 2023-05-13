@@ -1,63 +1,7 @@
 var canvas = document.getElementById("webgl-context");
 
-var mposx = 0.0;
-var mposy = 0.0;
-
-document.addEventListener("mousemove", function(event) {
-    mposx = event.clientX;
-    mposy = event.clientY;
-});
-
-function updateorthomatrix(width, height) {
-    var left = 0.0;
-    var right = width;
-    var bottom = height;
-    var top = 0.0;
-    var near = 0.0;
-    var far = 1.0;
-
-    return [
-        2.0 / (right - left), 0.0, 0.0, 0.0,
-        0.0, 2.0 / (top - bottom), 0.0, 0.0,
-        0.0, 0.0, (-2.0) / (far - near), 0.0,
-        -((right + left) / (right - left)), -((top + bottom) / (top - bottom)), -((far + near)/(far - near)),  1.0
-    ];
-}
-
-var batch = new vokebatch();
-var vokefontrendering = new vokefontrenderer("https://mrsrina.github.io/web/assets/JetBrainsMono-Bold.ttf", 18);
-var batchprogram = new vokeprogram(new Map([
-    [`
-    attribute vec2 aPos;
-    attribute vec2 aTexCoord;
-
-    uniform mat4 uMVP;
-    uniform vec4 uRect;
-    varying vec2 vTexCoord;
-
-    void main() {
-        if (uRect.z == 0.0 && uRect.w == 0.0) {
-            gl_Position = uMVP * vec4(aPos, 0.0, 1.0);
-        } else {
-            gl_Position = uMVP * vec4((aPos * uRect.zw) + uRect.xy, 0.0, 1.0);
-        }
-
-        vTexCoord = aTexCoord;
-    }
-    `, gl.VERTEX_SHADER],
-    [`
-    precision mediump float;
-    varying vec2 vTexCoord;
-    uniform vec4 uColor;
-
-    void main() {
-        gl_FragColor = uColor;
-    }
-    `, gl.FRAGMENT_SHADER]
-]));
-
-var programeffects = new vokeprogram(new Map([
-    [`
+var programeffects = new vokeprogram([{
+    src: `
     attribute vec3 aPos;
     varying vec3 vPos;
     uniform mat4 uMVP;
@@ -144,10 +88,13 @@ var programeffects = new vokeprogram(new Map([
     void main() {
         gl_Position = uMVP * vec4(aPos, 1.0);
         vPos = aPos;
-        gl_PointSize = 1.0;
+        gl_PointSize = noise(vPos.xy) * 10.0;
     }
-    `, gl.VERTEX_SHADER],
-    [`
+    `,
+    stage: gl.VERTEX_SHADER
+},
+{
+    src: `
     precision mediump float;
 
     float rand(vec2 co) {
@@ -229,58 +176,48 @@ var programeffects = new vokeprogram(new Map([
         return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y;
     }
 
-    uniform vec2 uMousePos;
     uniform vec2 uTickingPos;
     varying vec3 vPos;
 
     void main() {
-        float dist = length(gl_FragCoord.xy - uMousePos);
-
         float f = noise(vec2(length((rand(vec2(-2.0, 663.0))) * 0.2 - vPos.xy * uTickingPos.x)));
         gl_FragColor = (vec4(sin(1.0 - f), noise(vec2(uTickingPos.x * length(rand(vec2(-2.0, 663.0))))), 123233230.0, 1.0)) * (1.0 / vPos.z);
-    }`, gl.FRAGMENT_SHADER]
-]));
+    }`,
+    stage: gl.FRAGMENT_SHADER
+}]);
 
-canvas.style.width = "100%";
-canvas.style.height = "100%";
-
-canvas.width = 1280;
-canvas.height = 720;
-
-var mat4x4ortho = updateorthomatrix(canvas.width, canvas.height);
-
-batch.attachprogram(batchprogram.id);
-batch.mat4x4mvp = mat4x4ortho;
-
-batch.invoke();
-batch.call({
-    rect: [20, 20, 200, 200],
-    color: [1.0, 1.0, 1.0, 1.0],
-    stride: [0, 6]
+var simpleframe = new frame({
+    tag: "pompom"
 });
 
-batch.pop();
+simpleframe.rect.x = 20;
+simpleframe.rect.y = 200;
+simpleframe.rect.w = 200;
+simpleframe.rect.h = 200;
 
-batch.call({
-    rect: [70, 300, 200, 200],
-    color: [1.0, 0.0, 1.0, 1.0]
+var simpleframe = new frame({
+    tag: "pompom2"
 });
 
-batch.pop();
+simpleframe.rect.x = 20;
+simpleframe.rect.y = 20;
+simpleframe.rect.w = 200;
+simpleframe.rect.h = 200;
 
-batch.call({
-    rect: [240, 70, 200, 200],
-    color: [0.0, 0.0, 1.0, 1.0]
+var simpleframe = new frame({
+    tag: "pompom3"
 });
 
-batch.pop();
-batch.revoke();
+simpleframe.rect.x = 60;
+simpleframe.rect.y = 20;
+simpleframe.rect.w = 200;
+simpleframe.rect.h = 200;
 
 var bufferquad = new vokebuffer();
 bufferquad.setprimitive(gl.POINT);
 
 var vertices = [];
-var volume = [64, 64, 64];
+var volume = [11, 11, 11];
 
 for (var x = 0; x < volume[0]; x++) {
     for (var y = 0; y < volume[1]; y++) {
@@ -306,7 +243,7 @@ var projectionmatrix = glMatrix.mat4;
 // the main renderer function.
 function onrender() {
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.clearColor(0.0, 0.0, Math.sin(tickingpos[0]) * 0.5, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     tickingpos[0] += 0.001;
@@ -324,7 +261,6 @@ function onrender() {
     glMatrix.mat4.multiply(projectionmatrix, projectionmatrix, trsmatrix);
     
     programeffects.invoke();
-    programeffects.setuniformvec2("uMousePos", [mposx, mposy]);
     programeffects.setuniformvec2("uTickingPos", tickingpos);
     programeffects.setuniformmat4("uMVP", projectionmatrix);
 
@@ -333,9 +269,8 @@ function onrender() {
     bufferquad.revoke();
     programeffects.revoke();
 
-    //vokefontrendering.draw("hi!!!", 10, 10, [255, 255, 255, 255]);
-
-    batch.draw();
+    // Draw the batch from UI manager.
+    uibatching.draw();
 
     requestAnimationFrame(onrender);
 }
