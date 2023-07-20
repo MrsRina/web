@@ -88,7 +88,7 @@ var programeffects = new vokeprogram([{
     void main() {
         gl_Position = uMVP * vec4(aPos, 1.0);
         vPos = aPos;
-        gl_PointSize = noise(vPos.xy) * 10.0;
+        gl_PointSize = 2.0;
     }
     `,
     stage: gl.VERTEX_SHADER
@@ -180,7 +180,7 @@ var programeffects = new vokeprogram([{
     varying vec3 vPos;
 
     void main() {
-        float f = noise(vec2(length((rand(vec2(-2.0, 663.0))) * 0.2 - vPos.xy * uTickingPos.x)));
+        float f = noise(vec2(length((rand(vec2(-2.0, 663.0))) * 0.002 - vPos.xy * uTickingPos.y)));
         gl_FragColor = (vec4(sin(1.0 - f), noise(vec2(uTickingPos.x * length(rand(vec2(-2.0, 663.0))))), 123233230.0, 1.0)) * (1.0 / vPos.z);
     }`,
     stage: gl.FRAGMENT_SHADER
@@ -217,7 +217,7 @@ var bufferquad = new vokebuffer();
 bufferquad.setprimitive(gl.POINT);
 
 var vertices = [];
-var volume = [32, 32, 32];
+var volume = [64, 32, 32];
 
 for (var x = 0; x < volume[0]; x++) {
     for (var y = 0; y < volume[1]; y++) {
@@ -243,21 +243,25 @@ var projectionmatrix = glMatrix.mat4;
 // the main renderer function.
 function onrender() {
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0.0, 0.0, Math.sin(tickingpos[0]) * 0.5, 1.0);
+    gl.clearColor(0.0, 0.0, Math.sin(tickingpos[0]) * 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
     tickingpos[0] += 0.001;
-    tickingpos[1] -= 0.001;
+    tickingpos[1] -= 0.02;
 
     projectionmatrix = glMatrix.mat4.create();
     glMatrix.mat4.perspective(projectionmatrix, 1.5707963267948966 /* 90 degree */, canvas.width / canvas.height, 0.1, 100.0);
+
+    var scale = [2.0, 2.0, 2.0]
+    var pos = [-1.0, -1.0, -1.0]
 
     trsmatrix = glMatrix.mat4.create();
     glMatrix.mat4.rotateX(trsmatrix, trsmatrix, tickingpos[0]);
     glMatrix.mat4.rotateY(trsmatrix, trsmatrix, tickingpos[0]);
     glMatrix.mat4.rotateZ(trsmatrix, trsmatrix, tickingpos[0]);
-    glMatrix.mat4.translate(trsmatrix, trsmatrix, [-1.0, -1.0, -1.0]);
-    glMatrix.mat4.scale(trsmatrix, trsmatrix, [2.0, 2.0, 2.0]);
+    glMatrix.mat4.translate(trsmatrix, trsmatrix, pos);
+
+    glMatrix.mat4.scale(trsmatrix, trsmatrix, scale);
     glMatrix.mat4.multiply(projectionmatrix, projectionmatrix, trsmatrix);
     
     programeffects.invoke();

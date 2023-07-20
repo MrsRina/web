@@ -18,6 +18,7 @@ var uifontrenderer = new vokefontrenderer("https://mrsrina.github.io/web/assets/
 uifontrenderer.generateatlas();
 
 var tokenid = 0;
+var mouse = {x: 0, y: 0};
 
 function set(a, b) {
     if (a != b) {
@@ -51,13 +52,13 @@ class frame {
 
     oneventpre(event) {
         if (event.type == "mousedown" || event.type == "mouseup" || event.type == "mousemove") {
-            this.hovered = veccolliderect({x: event.clientX, y: event.clientY}, this.rect);
+            this.hovered = veccolliderect(mouse, this.rect);
         }
     }
 
     onevent(event) {
         if (event.type == "mousedown" && this.hovered) {
-            var mousepos = {x: event.clientX, y: event.clientY};
+            var mousepos = {x: mouse.x, y: mouse.y};
 
             this.dragging = event.button == 1;
             this.drag.x = mousepos.x - this.rect.x;
@@ -77,11 +78,11 @@ class frame {
             this.dragging = false;
         } else if (event.type == "mousemove") {
             if (this.dragging) {
-                this.rect.x = event.clientX - this.drag.x;
-                this.rect.y = event.clientY - this.drag.y;
+                this.rect.x = mouse.x - this.drag.x;
+                this.rect.y = mouse.y - this.drag.y;
             } else if (this.resizing) {
-                this.rect.w = (event.clientX - this.rect.x) + this.resize.x;
-                this.rect.h = (event.clientY - this.rect.y) + this.resize.y;
+                this.rect.w = (mouse.x - this.rect.x) + this.resize.x;
+                this.rect.h = (mouse.y - this.rect.y) + this.resize.y;
             }
         }
     }
@@ -194,6 +195,7 @@ canvas.style.height = "100%";
 canvas.width = 1920;
 canvas.height = 1080;
 
+
 var mat4x4ortho = updateorthomatrix(canvas.width, canvas.height);
 uifontrenderer.batch = uibatching;
 uibatching.attachprogram(batchprogram.id);
@@ -204,6 +206,9 @@ var focusedwidgetid = 0;
 function oneventlistener(event) {
     var hoveredid = 0;
     var widgethovered = null;
+
+    mouse.x = (event.clientX / canvas.clientWidth) * canvas.width;
+    mouse.y = (event.clientY / canvas.clientHeight) * canvas.height;
 
     widgetlist.forEach(widgets => {
         widgets.oneventpre(event);
