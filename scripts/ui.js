@@ -242,11 +242,11 @@ document.body.addEventListener("mousedown", oneventlistener);
 
 document.addEventListener("ui-manager-redraw", function() {
     uibatching.invoke();
+    uifontrenderer.draw("Pompom", 10, 10, [1.0, 1.0, 1.0, 1.0]);
 
     widgetlist.forEach(widgets => {
         widgets.ondrawreload();
     });
 
-    uifontrenderer.draw("Pompom", 10, 10, [1.0, 1.0, 1.0, 1.0]);
     uibatching.revoke();
 });
