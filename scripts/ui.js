@@ -195,7 +195,6 @@ canvas.style.height = "100%";
 canvas.width = 1920;
 canvas.height = 1080;
 
-
 var mat4x4ortho = updateorthomatrix(canvas.width, canvas.height);
 uifontrenderer.batch = uibatching;
 uibatching.attachprogram(batchprogram.id);
